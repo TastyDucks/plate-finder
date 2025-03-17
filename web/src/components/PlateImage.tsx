@@ -1,6 +1,3 @@
-import React from 'react';
-import { PlateData } from '../types';
-
 interface PlateImageProps {
     plate_imgs: string[];
     confidences: string[];
