@@ -50,6 +50,7 @@ class PlateFinder:
     def __init__(self) -> None:
         self.addresses: list[dict[str, Any]] = []
         self.load_addresses()
+        # In real-world use-cases I'd store permanently and load from disk (or a shared S3 bucket); downloading on startup is not ideal.
         self.detector: LicensePlateDetector = LicensePlateDetector(detection_model="yolo-v9-t-640-license-plate-end2end")
         self.plate_images: list[str] = [f for f in os.listdir(PLATES_DIR) if f.endswith(".jpg")]
 

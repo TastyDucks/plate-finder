@@ -2,4 +2,9 @@
 
 Uses pretrained model to display license plates extracted from images.
 
-Developemnt notes: [DEVLOG.md](DEVLOG.md)
+Development notes: [DEVLOG.md](DEVLOG.md)
+
+## Architecture
+
+- Vite + React + TypeScript frontend
+- FastAPI backend using a pretrained YOLO-based model.
