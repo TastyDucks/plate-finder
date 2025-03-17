@@ -4,8 +4,10 @@ FROM ubuntu:latest AS dev
 ARG UV_VERSION=0.6.2
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV SHELL=/bin/bash
 
 RUN apt-get update && apt-get install -y \
+    bash-completion \
     build-essential \
     pipx \
     python3.12 \
@@ -14,19 +16,24 @@ RUN apt-get update && apt-get install -y \
     curl \
     git \
     libgl1 \
-    micro
+    micro \
+    nodejs \
+    npm
 # && apt-get clean && rm -rf /var/lib/apt/lists/* # Would do this in real runtime images to keep things smaller.
 
+# Python tooling.
 RUN pipx ensurepath && pipx install "uv==$UV_VERSION"
 
-# Grab the dataset and dump images into the plates directory. This dataset actually includes bounding boxes but I'll delete them in the spirit of the task.
-#RUN mkdir plates && cd plates && curl -L "https://universe.roboflow.com/ds/ScF3W2xwYJ?key=U0grCHK5DR" -o plates.zip \
-#    && unzip plates.zip && rm plates.zip \
-#    && mv test/images/*.jpg . && rm -rf test \
-#    && mv train/images/*.jpg . && rm -rf train \
-#    && mv valid/images/*.jpg . && rm -rf valid
-
-# On second thought I'm going to store them with git LFS and ship them in the container.
+# Node tooling.
+RUN npm i -g corepack && corepack enable && corepack prepare pnpm@latest --activate
+RUN pnpm setup
+RUN mkdir -p /usr/local/pnpm-bin
+ENV PATH="/usr/local/pnpm-bin:${PATH}"
+RUN pnpm config set global-bin-dir /usr/local/pnpm-bin
+RUN pnpm add -g vite \
+    && pnpm add -g @shadcn/ui \
+    && pnpm add -g eslint \
+    && pnpm add -g prettier
 
 FROM dev AS build
 
@@ -36,7 +43,7 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=0
 
 WORKDIR /app
 
-ADD . .
+ADD api .
 
 RUN uv sync --no-install-project --no-dev
 
@@ -54,8 +61,7 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app /app
-#RUN mv /plates /app/src/plates
 ENV PATH="/app/.venv/bin:${PATH}"
 WORKDIR /app/src
-EXPOSE 80
-CMD ["python3.12", "main.py"]
+EXPOSE 8000
+CMD ["python3.12", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
