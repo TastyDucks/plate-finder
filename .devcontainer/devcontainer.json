@@ -1,0 +1,9 @@
+{
+  "name": "Plate Finder",
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": "..",
+    "target": "dev"
+  },
+  "forwardPorts": [8080]
+}

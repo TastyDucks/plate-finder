@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Plate Finder</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        #map {
+            height: 400px;
+            width: 100%;
+        }
+
+        .img-container {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            display: none;
+        }
+
+        .card {
+            margin-bottom: 20px;
+        }
+        
+        .plate-image-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #plate-image {
+            max-width: 100%;
+            max-height: 100%;
+            width: 100%;
+            height: auto;
+            object-fit: cover;
+        }
+        
+        .image-card {
+            height: 100%;
+        }
+        
+        .confidence-badge {
+            margin-left: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container py-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>License Plate Finder</h1>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <button id="new-plate-btn" class="btn btn-primary">Generate New Plate</button>
+        </div>
+        <div class="row gx-4">
+            <!-- Vehicle image and license plate side by side with equal width -->
+            <div class="col-md-6">
+                <div class="card image-card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Vehicle Image</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="img-container">
+                            <img id="annotated-image" src="{{ annotated_img }}" alt="Vehicle Image"
+                                class="img-fluid">
+                            <div id="loading-overlay" class="loading-overlay">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+                        <p class="mb-1"><strong>Image:</strong> <span id="image-filename">{{ image_filename }}</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card image-card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Detected License Plate</h5>
+                        <span id="plate-status">
+                            {% if plate_detected %}
+                            <span class="badge bg-success confidence-badge">Confidence: {{ confidence }}</span>
+                            {% else %}
+                            <span class="badge bg-danger confidence-badge">No Plate Detected</span>
+                            {% endif %}
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <div class="plate-image-container">
+                            <img id="plate-image" src="{{ plate_img }}" alt="License Plate">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Address and map below both images -->
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Associated Address</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <p id="street-address" class="mb-1">{{ address.street_address }}</p>
+                                <p id="city-state-zip" class="mb-3">{{ address.city }}, {{ address.state }} {{ address.zip_code }}</p>
+                            </div>
+                            <div class="col-md-8">
+                                <div id="map"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script>
+        // Initialize map
+        const map = L.map('map').setView([{{ lat }}, {{ lon }}], 14);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Add marker for the address
+        const marker = L.marker([{{ lat }}, {{ lon }}]).addTo(map);
+        marker.bindPopup("{{ address.street_address }}").openPopup();
+
+        // Function to update the UI with new data
+        function updateUI(data) {
+            document.getElementById('annotated-image').src = data.annotated_img;
+            document.getElementById('image-filename').textContent = data.image_filename;
+
+            // Always update the plate image
+            document.getElementById('plate-image').src = data.plate_img;
+
+            // Update plate status in the header
+            const plateStatusSpan = document.getElementById('plate-status');
+            if (data.plate_detected) {
+                plateStatusSpan.innerHTML = `<span class="badge bg-success confidence-badge">Confidence: ${data.confidence}</span>`;
+            } else {
+                plateStatusSpan.innerHTML = `<span class="badge bg-danger confidence-badge">No Plate Detected</span>`;
+            }
+
+            document.getElementById('street-address').textContent = data.address.street_address;
+            document.getElementById('city-state-zip').textContent =
+                `${data.address.city}, ${data.address.state} ${data.address.zip_code}`;
+
+            // Update map location
+            map.setView([data.lat, data.lon], 14);
+            marker.setLatLng([data.lat, data.lon]);
+            marker.bindPopup(data.address.street_address).openPopup();
+
+            // Hide loading overlay
+            document.getElementById('loading-overlay').style.display = 'none';
+        }
+
+        // Add event listener to button
+        document.getElementById('new-plate-btn').addEventListener('click', function () {
+            // Show loading overlay
+            document.getElementById('loading-overlay').style.display = 'flex';
+
+            // Fetch new plate data
+            fetch('/api/new-plate')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('Error:', data.error);
+                        alert('Error: ' + data.error);
+                        document.getElementById('loading-overlay').style.display = 'none';
+                        return;
+                    }
+                    updateUI(data);
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error: ' + error.message);
+                    document.getElementById('loading-overlay').style.display = 'none';
+                });
+        });
+    </script>
+</body>
+
+</html>
