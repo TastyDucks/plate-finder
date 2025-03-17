@@ -26,7 +26,7 @@ jobs:
         container:
           - path: .devcontainer
             name: dev
-          - path: .
+          - path: api
             name: api
     steps:
       - name: Checkout code
