@@ -35,6 +35,11 @@ RUN pnpm add -g vite \
     && pnpm add -g eslint \
     && pnpm add -g prettier
 
+RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg -o /usr/share/keyrings/githubcli.gpg && \
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list
+
+RUN apt-get update && apt-get install -y gh
+
 FROM dev AS build
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
