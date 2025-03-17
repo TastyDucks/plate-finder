@@ -95,4 +95,10 @@ Will sort these by impact and effort tomorrow morning.
 
 Removing plates from git lfs and tracking normally, Railway can't pull those.
 
+## 02:30
+
+Mixed-platform dev and deploy environments are a pain. I was wrong earlier when I said no C++ bindings -- OpenCV uses them.
+
+I believe the libgl issues have to do with how Ubuntu packages things for arm64 vs amd64. For now I'm adding a few more packages to the Dockerfile.
+
 Deployed MVP to <https://platefinder.space> via Railway.
