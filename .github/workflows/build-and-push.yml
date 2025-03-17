@@ -2,12 +2,12 @@ name: Build and Push Docker Images
 on:
   push:
     branches:
-      - inference-split
+      - split-inference
     paths:
       - "api/**"
   pull_request:
     branches:
-      - inference-split
+      - split-inference
   workflow_dispatch:
 permissions:
   id-token: write
