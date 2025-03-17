@@ -59,16 +59,6 @@ I strongly prefer keeping all source in-repo. `href`ing blindly from CDNs isn't 
 
 I'd also write things API-first, use an OpenAPI spec to get codegen for clients which could be bundled, minified, and packaged up appropriately into an SDK (npm for JS clients). Then keep an org-internal NPM repo.
 
-**General thoughts:**
-
-This takehome is too simple IMO, doesn't really distinguish deep SWE knowledge from what can be "vibe-coded" and slapped together in three hours. Hence why I'm spending time producing these organic, human-written tokens -- chains of thought -- uh, words. It's right on the pareto frontier of what LLMs can trivially churn out with some simple iteration, it doesn't extract the underlying experience a human can bring to bear.
-
-Do I have recommendations for how to actually test for that? What would I do if I were hiring a SWE? Just talk to them, I guess, see what they bring up. Real knowledge and experience should bring *nuance* and consideration of long-term secondary and tertiary concerns; something LLM vibe-coding can't (yet) do.
-
-Million times better than Leetcode though!
-
-Time to refine.
-
 ## 00:15
 
 Clicking through the site to check out performance on this model.
@@ -85,5 +75,20 @@ Also some false-positives where tiny bounding boxes are returned. Going to add a
 Inline CSS needs work, needs to be moved to a separate file and hand-written. Will ditch Bootstrap.
 
 Sometimes images fail to be base64 encoded: `Warning: Empty image received in encode_image_to_base64`. Need to validate that.
+
+Steps for tomorrow:
+- Switch to FastAPI to get OpenAPI spec?
+- CI/CD beyond what Railway provides?
+- Break out and refactor CSS, JS and static bundling?
+- Secondary image processing pipeline?
+- Fetch images from an object store?
+- User-uploadable images?
+- Benchmark models?
+
+Will sort these by impact and effort tomorrow morning.
+
+## 01:45
+
+`libGL.so.1` missing on Railway when loading OpenCV, some arm64/aarch64 issue I'm sure.
 
 Deployed MVP to <https://platefinder.space> via Railway.

@@ -1,5 +1,5 @@
 # Not going into real prod, just grab latest. Would pin to LTS for real deployment.
-FROM ubuntu:latest as dev
+FROM ubuntu:latest AS dev
 
 ARG UV_VERSION=0.6.2
 
@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     unzip \
     curl \
     git \
+    libgl1 \
     micro
 # && apt-get clean && rm -rf /var/lib/apt/lists/* # Would do this in real runtime images to keep things smaller.
 
@@ -37,11 +38,16 @@ WORKDIR /app
 
 ADD . .
 
-RUN uv sync --frozen --no-install-project --no-dev
+RUN uv sync --no-install-project --no-dev
 
-RUN uv sync --frozen --no-dev
+RUN uv sync --no-dev
 
-FROM dev AS runtime
+FROM ubuntu:latest AS runtime
+
+RUN apt-get update && apt-get install -y \
+    python3.12 \
+    libgl1 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app /app
 #RUN mv /plates /app/src/plates
