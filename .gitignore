@@ -3,3 +3,7 @@
 
 # Python
 .venv
+
+# Node and pnpm
+node_modules
+.pnpm-store

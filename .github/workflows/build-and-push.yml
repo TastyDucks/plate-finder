@@ -21,6 +21,13 @@ jobs:
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        container:
+          - path: .devcontainer
+            name: dev
+          - path: .
+            name: api
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -34,7 +41,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.URL }}.platefinder
+          images: ${{ env.URL }}.${{ matrix.container.name}}
           flavor: |
             latest=true
           tags: |
@@ -52,11 +59,11 @@ jobs:
       - name: Build and Push
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: Dockerfile
+          context: ${{ matrix.container.path }}
+          file: ${{ matrix.container.path }}/Dockerfile
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           pull: true
           cache-from: type=gha
