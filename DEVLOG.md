@@ -89,6 +89,10 @@ Will sort these by impact and effort tomorrow morning.
 
 ## 01:45
 
-`libGL.so.1` missing on Railway when loading OpenCV, some arm64/aarch64 issue I'm sure.
+`libGL.so.1` missing on Railway when loading OpenCV, some arm64 vs amd64 defaults issue with Ubuntu I'm sure. Resolved by installing libgl1.
+
+## 02:15
+
+Removing plates from git lfs and tracking normally, Railway can't pull those.
 
 Deployed MVP to <https://platefinder.space> via Railway.
