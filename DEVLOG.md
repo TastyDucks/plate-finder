@@ -121,6 +121,17 @@ Given the time constraints I'm wary of getting stuck chasing down AWS IAM roles 
 
 ### 11:30
 
-I've chosen to focus on breaking out the inference pipeline, and add a second model to the pipeline today.
+I've chosen to focus on breaking out the inference pipeline today.
 
 I forgot to mention this earlier, but I had to remove `--frozen` from `uv sync` yesterday to ensure the packages were reinstalled for the appropriate `TARGETPLATFORM`.
+
+
+### 15:40
+
+FastAPI inference container done, deployed via Runpod. React frontend done with Vite. Deployed to Railway.
+
+Github actions are building api and dev containers.
+
+### 16:00:
+
+Updating README.

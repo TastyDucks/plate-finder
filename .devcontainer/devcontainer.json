@@ -1,9 +1,14 @@
 {
   "name": "Plate Finder",
-  "build": {
-    "dockerfile": "../Dockerfile",
-    "context": "..",
-    "target": "dev"
-  },
-  "forwardPorts": [8080]
+  "image": "ghcr.io/tastyducks/plate-finder.dev:latest",
+  "mounts": [
+    {
+      "source": "/var/run/docker.sock",
+      "target": "/var/run/docker.sock",
+      "type": "bind"
+    }
+  ],
+  "remoteEnv": {
+    "DOCKER_HOST": "unix:///var/run/docker.sock"
+  }
 }

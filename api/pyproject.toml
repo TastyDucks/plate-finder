@@ -8,7 +8,9 @@
         "open_image_models>=0.2.1",
         "opencv-contrib-python-headless>=4.11.0.86",
         "pillow>=11.1.0",
-    ]
+        "fastapi>=0.115.11",
+        "uvicorn>=0.34.0",
+]
     description = "License plate extractor"
     name = "platefinder"
     readme = "README.md"

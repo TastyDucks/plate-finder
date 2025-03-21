@@ -5,34 +5,52 @@ import os
 import pathlib
 import random
 from io import BytesIO
-from typing import Any, Optional, Union, cast
+from typing import Any, Dict, Optional, Union, cast
 
-import aiohttp_jinja2
 import cv2
-import jinja2
 import numpy as np
-from aiohttp import web
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from open_image_models import LicensePlateDetector
 from PIL import Image
+from pydantic import BaseModel
 
 # Define paths
 BASE_DIR = pathlib.Path(__file__).parent
 PLATES_DIR = BASE_DIR / "plates"
 STATIC_DIR = BASE_DIR / "static"
-TEMPLATE_DIR = BASE_DIR / "templates"
 
 # Ensure static directory exists
 STATIC_DIR.mkdir(exist_ok=True)
 
 # Minimum area threshold for license plate detection.
-# This model uses 640x640 images, so let's say the plate needs to cover at least 0.5% of the image: 640 * 640 * 0.005 = 2048.
-# Long-term in production this should be tuned over time -- could use a tiny model trained just for that, or A/B test, or hand-write some heuristics.
-MIN_AREA_THRESHOLD: float = 2048.0
+MIN_AREA_THRESHOLD: float = 1048.0
+
+class Address(BaseModel):
+    street_address: str
+    city: str 
+    state: str
+    zip_code: str
+    lat: float
+    lon: float
+
+class PlateResponse(BaseModel):
+    image_filename: str
+    annotated_img: str
+    plate_imgs: list[str]  # Changed from plate_img to plate_imgs (array)
+    confidences: list[str]  # Changed from confidence to confidences (array)
+    plate_detected: bool
+    address: Dict[str, Any]
+    lat: float
+    lon: float
 
 class PlateFinder:
     def __init__(self) -> None:
         self.addresses: list[dict[str, Any]] = []
         self.load_addresses()
+        # In real-world use-cases I'd store permanently and load from disk (or a shared S3 bucket); downloading on startup is not ideal.
         self.detector: LicensePlateDetector = LicensePlateDetector(detection_model="yolo-v9-t-640-license-plate-end2end")
         self.plate_images: list[str] = [f for f in os.listdir(PLATES_DIR) if f.endswith(".jpg")]
 
@@ -87,7 +105,7 @@ class PlateFinder:
             }
         return random.choice(self.addresses)
 
-    def detect_license_plate(self, image_path: pathlib.Path) -> tuple[np.ndarray, np.ndarray, float]:
+    def detect_license_plate(self, image_path: pathlib.Path) -> tuple[np.ndarray, list[np.ndarray], list[float]]:
         """Detect license plates in the given image"""
         try:
             # Load the original image
@@ -95,8 +113,8 @@ class PlateFinder:
             if original_image is None:
                 print(f"Failed to load image: {image_path}")
                 return (np.ones((480, 640, 3), dtype=np.uint8) * 240,
-                        self.no_plate_img,
-                        0.0)
+                        [self.no_plate_img],
+                        [0.0])
 
             # Run detection
             detections = self.detector.predict(original_image)
@@ -104,34 +122,40 @@ class PlateFinder:
             # Generate annotated image
             annotated_image = self.detector.display_predictions(original_image.copy())
 
-            # Return the no plate image if no detections
             if not detections:
-                return annotated_image, self.no_plate_img, 0.0
+                return annotated_image, [], []
 
             plate_detections = detections
             plate_detections = [d for d in plate_detections if d.bounding_box.area > MIN_AREA_THRESHOLD]
 
             if not plate_detections:
-                return annotated_image, self.no_plate_img, 0.0
+                return annotated_image, [], []
 
-            # Get the detection with highest confidence
-            best_detection = max(plate_detections, key=lambda x: x.confidence)
+            # Sort detections by confidence (highest first)
+            plate_detections.sort(key=lambda x: x.confidence, reverse=True)
+            
+            plate_imgs = []
+            confidences = []
+            
+            # Process each detection
+            for detection in plate_detections:
+                # Crop the license plate region from the original image
+                x_min, y_min, width, height = detection.bounding_box.to_xywh()
+                x_max = x_min + width
+                y_max = y_min + height
+                plate_img = original_image[int(y_min):int(y_max), int(x_min):int(x_max)]
+                plate_imgs.append(plate_img)
+                confidences.append(detection.confidence)
 
-            # Crop the license plate region from the original image
-            x_min, y_min, width, height = best_detection.bounding_box.to_xywh()
-            x_max = x_min + width
-            y_max = y_min + height
-            plate_img = original_image[int(y_min):int(y_max), int(x_min):int(x_max)]
-
-            # Return annotated image and plate image
-            return annotated_image, plate_img, best_detection.confidence
+            # Return annotated image and all plate images with confidences
+            return annotated_image, plate_imgs, confidences
 
         except Exception as e:
             print(f"Error detecting license plate: {e!s}")
             # Return a blank image and the no plate image
             blank_img = np.ones((480, 640, 3), dtype=np.uint8) * 240
             cv2.putText(blank_img, f"Error: {e!s}", (20, 240), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-            return blank_img, self.no_plate_img, 0.0
+            return blank_img, [self.no_plate_img], [0.0]
 
     def encode_image_to_base64(self, cv_image: np.ndarray) -> str:
         """Convert CV2 image to base64 string for embedding in HTML"""
@@ -163,52 +187,30 @@ class PlateFinder:
             img_str = base64.b64encode(buffer.getvalue()).decode("ascii")
             return f"data:image/jpeg;base64,{img_str}"
 
+# Initialize FastAPI app
+app = FastAPI(
+    title="License Plate Finder API",
+    description="API for detecting license plates and returning associated addresses",
+    version="1.0.0"
+)
 
-# Initialize the app
-app = web.Application()
-routes = web.RouteTableDef()
-
-# Initialize Jinja2 templates
-aiohttp_jinja2.setup(
-    app,
-    loader=jinja2.FileSystemLoader(str(TEMPLATE_DIR))
+# Configure CORS for the React frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, specify actual frontend origin
+    allow_credentials=True,
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
 )
 
 # Initialize PlateFinder
 plate_finder = PlateFinder()
 
+# Mount static files
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-@routes.get("/")
-@aiohttp_jinja2.template("index.html")
-async def index(_request: web.Request) -> dict[str, Any]:
-    """Handle the index page request"""
-    # Get a random plate image
-    image_filename = plate_finder.get_random_plate_image()
-    image_path = PLATES_DIR / image_filename if image_filename else PLATES_DIR / "default.jpg"
-
-    # Detect license plate
-    annotated_img, plate_img, confidence = plate_finder.detect_license_plate(image_path)
-
-    # Get a random address
-    address = plate_finder.get_random_address()
-
-    # Prepare data for template
-    context = {
-        "image_filename": image_filename,
-        "annotated_img": plate_finder.encode_image_to_base64(annotated_img),
-        "plate_img": plate_finder.encode_image_to_base64(plate_img),
-        "confidence": f"{confidence:.2%}" if confidence > 0 else "No plate detected",
-        "plate_detected": confidence > 0,
-        "address": address,
-        "lat": address.get("lat", 37.7749),
-        "lon": address.get("lon", -122.4194)
-    }
-
-    return context
-
-
-@routes.get("/api/new-plate")
-async def new_plate(_request: web.Request) -> web.Response:
+@app.get("/api/new-plate", response_model=PlateResponse)
+async def new_plate() -> dict[str, Any]:
     """API endpoint to get a new random plate"""
     try:
         # Get a random plate image
@@ -216,35 +218,44 @@ async def new_plate(_request: web.Request) -> web.Response:
         image_path = PLATES_DIR / image_filename if image_filename else PLATES_DIR / "default.jpg"
 
         # Detect license plate
-        annotated_img, plate_img, confidence = plate_finder.detect_license_plate(image_path)
+        annotated_img, plate_imgs, confidences = plate_finder.detect_license_plate(image_path)
 
         # Get a random address
         address = plate_finder.get_random_address()
+
+        # Convert all plate images to base64
+        encoded_plate_imgs = [plate_finder.encode_image_to_base64(img) for img in plate_imgs]
+        
+        # Format confidences as percentages
+        formatted_confidences = [f"{conf:.2%}" for conf in confidences]
+        
+        # Determine if any valid plate was detected
+        plate_detected = any(conf > 0 for conf in confidences)
 
         # Prepare data for JSON response
         data: dict[str, Any] = {
             "image_filename": image_filename,
             "annotated_img": plate_finder.encode_image_to_base64(annotated_img),
-            "plate_img": plate_finder.encode_image_to_base64(plate_img),
-            "confidence": f"{confidence:.2%}" if confidence > 0 else "No plate detected",
-            "plate_detected": confidence > 0,
+            "plate_imgs": encoded_plate_imgs,
+            "confidences": formatted_confidences,
+            "plate_detected": plate_detected,
             "address": address,
             "lat": address.get("lat", 37.7749),
             "lon": address.get("lon", -122.4194)
         }
 
-        return web.json_response(data)
+        return data
     except Exception as e:
         print(f"Error in new plate API: {e!s}")
-        return web.json_response({"error": str(e)})
+        raise HTTPException(status_code=500, detail=str(e))
 
-
-# Add static file handling
-app.router.add_static("/static/", path=STATIC_DIR, name="static")
-
-# Add routes to the app
-app.add_routes(routes)
+# Add health check endpoint
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy"}
 
 if __name__ == "__main__":
-    print("Starting Plate Finder server on http://0.0.0.0:8080")
-    web.run_app(app, host="0.0.0.0", port=8080)
+    import uvicorn
+    print("Starting Plate Finder API server on http://0.0.0.0:8000")
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
